@@ -20,6 +20,7 @@
   - [`add timezone field`](#add-timezone-field)
   - [`codecs`](#codecs)
   - [`dead time`](#dead-time)
+  - [`unlinked dead time`](#unlinked-dead-time)
   - [`fields`](#fields)
 - [`admin`](#admin)
   - [`enabled`](#enabled)
@@ -177,8 +178,8 @@ Please note that files Log Courier has already started harvesting will continue
 to be harvested after the reload with their original configuration; the reload
 process will only affect new files. Additionally, harvested log files will not
 be reopened. Log rotations are detected automatically. To control when a
-harvested log file is closed you can adjust the [`dead time`](#dead-time)
-option.
+harvested log file is closed you can adjust the [`dead time`](#dead-time) and
+[`unlinked dead time`](#unlinked-dead-time) options.
 
 In the case of a network configuration change, Log Courier will disconnect and
 reconnect as required at the earliest opportunity.
@@ -311,9 +312,19 @@ If a log file has not been modified in this time period, it will be closed and
 Log Courier will simply watch it for modifications. If the file is modified it
 will be reopened.
 
+### `unlinked dead time`
+
+*Duration. Optional. Default: "1h"
+Configuration reload will only affect new or resumed files*
+
 If a log file that is being harvested is deleted, it will remain on disk until
-Log Courier closes it. Therefore it is important to keep this value sensible to
-ensure old log files are not kept open preventing deletion.
+Log Courier closes it. On Linux, Log Courier detects that a file has been
+deleted, and will keep it open for the shorter of this and `dead time`, to
+allow the space on disk to be released as soon as possible.
+
+Don't reduce this unless you're sure that the log file rotation processes in
+use guarantee there's no possibility of an application continuing to write to a
+long-unlinked log file.
 
 ### `fields`
 
@@ -392,7 +403,8 @@ If the log file is rotated, Log Courier will detect this and automatically start
 harvesting the new file. It will also keep the old file open to catch any
 delayed writes that a still-reloading application has not yet written. You can
 configure the time period before this old log file is closed using the
-[`dead time`](#dead-time) option.
+[`dead time`](#dead-time) and [`unlinked dead time`](#unlinked-dead-time)
+options.
 
 See above for a description of the Fileglob field type.
 

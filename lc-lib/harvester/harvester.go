@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -387,12 +388,17 @@ func (h *Harvester) statCheck() error {
 		return errFileTruncated
 	}
 
+	effectiveDeadTime := h.streamConfig.DeadTime
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok && stat.Nlink == 0 {
+		effectiveDeadTime = h.streamConfig.UnlinkedDeadTime
+	}
+
 	// If lastReadTime was more than dead time, this file is probably dead.
 	// Stop only if the mtime did not change since last check - this stops a
 	// race where we hit EOF but as we Stat() the mtime is updated - this mtime
 	// is the one we monitor in order to resume checking, so we need to check it
 	// didn't already update
-	if age := time.Since(h.lastReadTime); age > h.streamConfig.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
+	if age := time.Since(h.lastReadTime); age > effectiveDeadTime && h.fileinfo.ModTime() == info.ModTime() {
 		log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
 		// TODO: dead_action implementation here
 		return errStopRequested

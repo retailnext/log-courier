@@ -65,6 +65,7 @@ const (
 	defaultStreamAddTimezoneField    bool          = false
 	defaultStreamCodec               string        = "plain"
 	defaultStreamDeadTime            time.Duration = 1 * time.Hour
+	defaultStreamUnlinkedDeadTime    time.Duration = 1 * time.Hour
 )
 
 // Section is implemented by external config structures that will be
@@ -159,6 +160,7 @@ type Stream struct {
 	AddTimezoneField bool                   `config:"add timezone field"`
 	Codecs           []CodecStub            `config:"codecs"`
 	DeadTime         time.Duration          `config:"dead time"`
+	UnlinkedDeadTime time.Duration          `config:"unlinked dead time"`
 	Fields           map[string]interface{} `config:"fields"`
 }
 
@@ -169,6 +171,7 @@ func (sc *Stream) InitDefaults() {
 	sc.AddPathField = defaultStreamAddPathField
 	sc.AddTimezoneField = defaultStreamAddTimezoneField
 	sc.DeadTime = defaultStreamDeadTime
+	sc.UnlinkedDeadTime = defaultStreamUnlinkedDeadTime
 }
 
 // File holds the configuration for a set of paths that share the same stream
