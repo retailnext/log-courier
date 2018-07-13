@@ -41,6 +41,8 @@
   - [`spool max bytes`](#spool-max-bytes)
   - [`spool size`](#spool-size)
   - [`spool timeout`](#spool-timeout)
+  - [`listen address`](#listen-address)
+  - [`telemetry path`](#telemetry-path)
 - [`includes`](#includes)
 - [`network`](#network)
   - [`failure backoff`](#failure-backoff)
@@ -482,6 +484,17 @@ If `max line bytes` is greater than this value, any lines that exceed this size
 will trigger additional memory allocations. This value should be set to a value
 just above the 90th percentile (or average) line length.
 
+### `listen address`
+
+*String. Optional. Default: (disabled)*
+
+If configured, log-courier will listen on HTTP and serve metrics that can be
+collected by Prometheus at the [`telemetry path`](#telemetry-path).
+
+    "listen address": ":10180"
+
+By default, the listener is disabled.
+
 ### `max line bytes`
 
 *Number. Optional. Default: 1048576*
@@ -550,6 +563,16 @@ useful only in very specific circumstances.*
 
 The maximum amount of time to wait for a full spool. If an incomplete spool is
 not filled within this time limit, the spool will be flushed immediately.
+
+### `telemetry path`
+
+*String. Optional. Default: `/metrics`*
+
+The path Prometheus metrics are exposed at.
+
+With a [`listen address`](#`listen-address`) of `:10180` and the default
+`telemetry path`, the metrics can be accessed at
+`http://(host ip):10180/metrics`.
 
 ## `includes`
 

@@ -50,6 +50,7 @@ const (
 	defaultGeneralProspectInterval   time.Duration = 10 * time.Second
 	defaultGeneralSpoolMaxBytes      int64         = 10485760
 	defaultGeneralSpoolSize          int64         = 1024
+	defaultGeneralTelemetryPath      string        = "/metrics"
 	defaultGeneralSpoolTimeout       time.Duration = 5 * time.Second
 	defaultNetworkBackoff            time.Duration = 5 * time.Second
 	defaultNetworkBackoffMax         time.Duration = 300 * time.Second
@@ -86,6 +87,7 @@ type General struct {
 	GlobalFields     map[string]interface{} `config:"global fields"`
 	Host             string                 `config:"host"`
 	LineBufferBytes  int64                  `config:"line buffer bytes"`
+	ListenAddress    string                 `config:"listen address"`
 	LogFile          string                 `config:"log file"`
 	LogLevel         logging.Level          `config:"log level"`
 	LogStdout        bool                   `config:"log stdout"`
@@ -96,6 +98,7 @@ type General struct {
 	SpoolSize        int64                  `config:"spool size"`
 	SpoolMaxBytes    int64                  `config:"spool max bytes"`
 	SpoolTimeout     time.Duration          `config:"spool timeout"`
+	TelemetryPath    string                 `config:"telemetry path"`
 }
 
 // InitDefaults initialises default values for the general configuration
@@ -110,7 +113,9 @@ func (gc *General) InitDefaults() {
 	gc.SpoolSize = defaultGeneralSpoolSize
 	gc.SpoolMaxBytes = defaultGeneralSpoolMaxBytes
 	gc.SpoolTimeout = defaultGeneralSpoolTimeout
+	gc.TelemetryPath = defaultGeneralTelemetryPath
 	// NOTE: Empty string for Host means calculate it automatically, so leave it
+	// Likewise, an empty ListenAddress means to disable the Prometheus HTTP listener (the default)
 }
 
 // Network holds network related configuration

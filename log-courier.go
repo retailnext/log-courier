@@ -20,12 +20,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"html/template"
 	stdlog "log"
+	"net/http"
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -36,6 +40,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 	"github.com/driskell/log-courier/lc-lib/spooler"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -64,6 +70,8 @@ type logCourier struct {
 	logFile       *DefaultLogBackend
 	lastSnapshot  time.Time
 	snapshot      *core.Snapshot
+	metricsServer *http.Server
+	metricsLock   sync.Mutex
 }
 
 // newLogCourier creates a new LogCourier structure for the log-courier binary
@@ -104,6 +112,7 @@ func (lc *logCourier) Run() {
 	}
 
 	publisherImp := publisher.NewPublisher(lc.pipeline, lc.config, registrarImp)
+	prometheus.MustRegister(publisherImp)
 
 	spoolerImp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisherImp)
 
@@ -113,8 +122,10 @@ func (lc *logCourier) Run() {
 		lc.harvester.Start(spoolerImp.Connect())
 		harvesterWait = lc.harvester.OnFinish()
 	} else {
-		if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.fromBeginning, registrarImp, spoolerImp); err != nil {
+		if prospectorImp, err := prospector.NewProspector(lc.pipeline, lc.config, lc.fromBeginning, registrarImp, spoolerImp); err != nil {
 			log.Fatalf("Failed to initialise: %s", err)
+		} else {
+			prometheus.MustRegister(prospectorImp)
 		}
 	}
 
@@ -238,6 +249,11 @@ func (lc *logCourier) startUp() {
 		}()
 	}
 
+	if err = lc.startListener(); err != nil {
+		fmt.Printf("Failed to initialize Prometheus HTTP listener: %s", err)
+		os.Exit(1)
+	}
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
@@ -308,6 +324,11 @@ func (lc *logCourier) reloadConfig() error {
 		log.Notice("Log file reopened")
 	}
 
+	// Re-start the HTTP listener
+	if err := lc.startListener(); err != nil {
+		log.Error("Failed to reinitialize Prometheus HTTP listener: %s", err)
+	}
+
 	// Pass the new config to the pipeline workers
 	lc.pipeline.SendConfig(lc.config)
 
@@ -326,4 +347,57 @@ func (lc *logCourier) cleanShutdown() {
 
 	lc.pipeline.Shutdown()
 	lc.pipeline.Wait()
+	lc.stopListener()
+}
+
+var rootTemplate = template.Must(template.New("/").Parse(`<html>
+<head><title>log-courier</title></head>
+<body>
+<h1>log-courier</h1>
+<p><a href="{{.}}">Metrics</a></p>
+</body>
+</html>`))
+
+// startListener (re-)starts the Prometheus HTTP listener if configured
+func (lc *logCourier) startListener() error {
+	lc.metricsLock.Lock()
+	defer lc.metricsLock.Unlock()
+	if lc.metricsServer != nil {
+		if err := lc.metricsServer.Shutdown(context.Background()); err != nil {
+			return err
+		}
+	}
+
+	if lc.config.General.ListenAddress == "" {
+		return nil
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle(lc.config.General.TelemetryPath, promhttp.Handler())
+	mux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		rootTemplate.Execute(writer, lc.config.General.TelemetryPath)
+	})
+
+	lc.metricsServer = &http.Server{Addr: lc.config.General.ListenAddress, Handler: mux}
+	go func() {
+		err := lc.metricsServer.ListenAndServe()
+		if err != http.ErrServerClosed {
+			log.Fatal("Failed to initialize Prometheus HTTP listener: %s", err)
+		}
+	}()
+
+	log.Notice("Prometheus metrics now listening on %s", lc.config.General.ListenAddress)
+	return nil
+}
+
+// stopListener stops the Prometheus HTTP listener
+func (lc *logCourier) stopListener() {
+	lc.metricsLock.Lock()
+	defer lc.metricsLock.Unlock()
+
+	if lc.metricsServer != nil {
+		if err := lc.metricsServer.Shutdown(context.Background()); err != nil {
+			log.Warning("Failed to shutdown Prometheus metrics listener: %s", err)
+		}
+	}
 }
